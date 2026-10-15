@@ -8,12 +8,15 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import health, tasks
 from app.core.config import settings
 from app.core.database import init_db
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 def create_app() -> FastAPI:
