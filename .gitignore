@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Node
+node_modules/
+dist/
+
+# Docker / data
+data/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 浏览器登录态与冒烟产物
+.auth/
+.smoke/
+open_ecom_rpa.db

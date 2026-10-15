@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>OpenEcom-RPA Console</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+  <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.min.js"></script>
+  <style>
+    body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", sans-serif; background: #f5f7fa; }
+    .header { background: #fff; padding: 16px 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .header h1 { margin: 0; font-size: 18px; color: #303133; }
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    .el-card { margin-bottom: 16px; }
+    .step { display: flex; align-items: center; padding: 6px 0; font-size: 13px; }
+    .step .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+    .step .dot.ok { background: #67c23a; }
+    .step .dot.running { background: #e6a23c; }
+    .step .dot.failed { background: #f56c6c; }
+    .step .meta { color: #909399; margin-left: 12px; font-size: 12px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1>OpenEcom-RPA 控制台</h1>
+  </div>
+  <div class="container">
+    <el-tabs v-model="tab">
+      <!-- 任务管理 -->
+      <el-tab-pane label="任务管理" name="tasks">
+        <el-card>
+          <div style="margin-bottom: 12px;">
+            <el-button type="primary" @click="openCreate">新建任务</el-button>
+            <el-button @click="loadTasks">刷新</el-button>
+          </div>
+          <el-table :data="tasks" stripe>
+            <el-table-column prop="name" label="名称" min-width="160" />
+            <el-table-column label="流程" min-width="160">
+              <template #default="{ row }">
+                <el-tag>{{ row.flow?.source || '-' }} → {{ row.flow?.target || '-' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'active' ? 'success' : 'info'">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="创建时间" width="180" />
+            <el-table-column label="操作" width="180">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" @click="runTask(row)">运行</el-button>
+                <el-button size="small" @click="openRuns(row)">历史</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- 运行历史 -->
+      <el-tab-pane label="运行历史" name="runs">
+        <el-card>
+          <el-select v-model="selectedTaskId" placeholder="选择任务" style="width: 300px; margin-bottom: 12px;" @change="loadRuns">
+            <el-option v-for="t in tasks" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
+          <el-table :data="runs" stripe>
+            <el-table-column prop="id" label="Run ID" width="280" />
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'success' ? 'success' : (row.status === 'failed' ? 'danger' : 'warning')">
+                  {{ row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="started_at" label="开始时间" width="180" />
+            <el-table-column prop="finished_at" label="结束时间" width="180" />
+            <el-table-column label="步骤日志">
+              <template #default="{ row }">
+                <div v-for="(s, i) in row.step_log" :key="i" class="step">
+                  <span class="dot" :class="s.status"></span>
+                  <strong>{{ s.step }}</strong>
+                  <span style="margin-left: 8px;">{{ s.detail }}</span>
+                  <span class="meta">{{ s.ts }}</span>
+                </div>
+                <div v-if="row.error" style="color:#f56c6c; font-size:12px; white-space: pre-wrap;">{{ row.error }}</div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 新建任务对话框 -->
+    <el-dialog v-model="createVisible" title="新建任务" width="480">
+      <el-form label-width="80px">
+        <el-form-item label="名称">
+          <el-input v-model="form.name" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" />
+        </el-form-item>
+        <el-form-item label="来源平台">
+          <el-select v-model="form.source" style="width:100%">
+            <el-option label="Temu" value="temu" />
+            <el-option label="Shopee" value="shopee" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标 ERP">
+          <el-select v-model="form.target" style="width:100%">
+            <el-option label="马帮" value="mabang" />
+            <el-option label="店小秘" value="dianxiaomi" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitCreate">创建</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted } = Vue
+const { ElMessage } = ElementPlus
+
+createApp({
+  setup() {
+    const tab = ref('tasks')
+    const tasks = ref([])
+    const runs = ref([])
+    const selectedTaskId = ref('')
+    const createVisible = ref(false)
+    const form = ref({ name: '', description: '', source: 'temu', target: 'mabang' })
+
+    async function loadTasks() {
+      const r = await fetch('/tasks')
+      tasks.value = await r.json()
+    }
+    function openCreate() {
+      form.value = { name: '', description: '', source: 'temu', target: 'mabang' }
+      createVisible.value = true
+    }
+    async function submitCreate() {
+      await fetch('/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.value.name,
+          description: form.value.description,
+          flow: { source: form.value.source, target: form.value.target },
+        }),
+      })
+      createVisible.value = false
+      ElMessage.success('已创建')
+      loadTasks()
+    }
+    async function runTask(row) {
+      await fetch(`/tasks/${row.id}/run`, { method: 'POST' })
+      ElMessage.success('已触发运行')
+    }
+    async function openRuns(row) {
+      selectedTaskId.value = row.id
+      tab.value = 'runs'
+      await loadRuns()
+    }
+    async function loadRuns() {
+      if (!selectedTaskId.value) return
+      const r = await fetch(`/tasks/${selectedTaskId.value}/runs`)
+      runs.value = await r.json()
+    }
+
+    onMounted(loadTasks)
+    return { tab, tasks, runs, selectedTaskId, createVisible, form, loadTasks, openCreate, submitCreate, runTask, openRuns, loadRuns }
+  }
+}).use(ElementPlus).mount('#app')
+</script>
+</body>
+</html>
